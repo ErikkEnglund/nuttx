@@ -183,6 +183,16 @@ int stm32_bringup(void)
     }
 #endif /* CONFIG_INPUT_BUTTONS */
 
+#ifdef CONFIG_INPUT_FT5X06
+  /* Register the touch controller as /dev/input0 */
+
+  ret = stm32_tsc_setup(0);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: stm32_tsc_setup() failed: %d\n", ret);
+    }
+#endif
+
 #ifdef CONFIG_VIDEO_FB
   /* Register the display as /dev/fb0 */
 

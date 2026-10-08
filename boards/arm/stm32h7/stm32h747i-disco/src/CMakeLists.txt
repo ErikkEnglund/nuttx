@@ -60,6 +60,10 @@ if(CONFIG_STM32H747I_DISCO_LCD)
   list(APPEND SRCS stm32_lcd.c stm32_lcdpanel.c)
 endif()
 
+if(CONFIG_INPUT_FT5X06)
+  list(APPEND SRCS stm32_ft5x06.c)
+endif()
+
 target_sources(board PRIVATE ${SRCS})
 
 set_property(GLOBAL PROPERTY LD_SCRIPT "${NUTTX_BOARD_DIR}/scripts/flash.ld")

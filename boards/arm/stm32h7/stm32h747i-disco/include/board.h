@@ -327,6 +327,13 @@
        FMC_SDCMR_MRD_CAS_LATENCY_2 |\
        FMC_SDCMR_MRD_WRITEBURST_MODE_SINGLE)
 
+/* I2C definitions **********************************************************/
+
+/* I2C4: touch controller of the MB1166 display board and audio codec */
+
+#define GPIO_I2C4_SCL      (GPIO_I2C4_SCL_1 | GPIO_SPEED_50MHz)  /* PD12 */
+#define GPIO_I2C4_SDA      (GPIO_I2C4_SDA_1 | GPIO_SPEED_50MHz)  /* PD13 */
+
 /* LCD definitions **********************************************************/
 
 /* The 4" 800x480 display of the MB1166 display board, connected over two

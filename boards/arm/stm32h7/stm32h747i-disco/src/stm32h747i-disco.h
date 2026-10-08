@@ -100,6 +100,15 @@
 #define GPIO_LCD_BL    (GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_SPEED_50MHz | \
                         GPIO_OUTPUT_CLEAR | GPIO_PORTJ | GPIO_PIN12)
 
+/* FT6x06 touch controller of the MB1166 display board on I2C4.  Its
+ * interrupt line PK7 is active low.
+ */
+
+#define FT5X06_I2C_ADDRESS  0x38
+
+#define GPIO_FT5X06_INT    (GPIO_INPUT | GPIO_FLOAT | GPIO_SPEED_100MHz | \
+                            GPIO_PORTK | GPIO_PIN7)
+
 /* SD/TF Card'detected pin */
 
 #if defined(CONFIG_STM32_SDMMC1)
@@ -190,6 +199,19 @@ int stm32_sdio_initialize(void);
  *   value on failure.
  *
  ****************************************************************************/
+
+#ifdef CONFIG_INPUT_FT5X06
+/****************************************************************************
+ * Name: stm32_tsc_setup
+ *
+ * Description:
+ *   Register the touch controller as /dev/inputN where N is the minor
+ *   device number.
+ *
+ ****************************************************************************/
+
+int stm32_tsc_setup(int minor);
+#endif
 
 #ifdef CONFIG_STM32H747I_DISCO_LCD
 #define LCD_PANEL_OTM8009A  1

@@ -62,6 +62,10 @@ ifeq ($(CONFIG_STM32H747I_DISCO_LCD),y)
 CSRCS += stm32_lcd.c stm32_lcdpanel.c
 endif
 
+ifeq ($(CONFIG_INPUT_FT5X06),y)
+CSRCS += stm32_ft5x06.c
+endif
+
 DEPPATH += --dep-path board
 VPATH += :board
 CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)arch$(DELIM)$(CONFIG_ARCH)$(DELIM)src$(DELIM)board$(DELIM)board
