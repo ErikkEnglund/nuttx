@@ -1513,7 +1513,15 @@ static int stm32_ltdcirq(int irq, void *context, void *arg)
       priv->error = OK;
 
 #if defined(CONFIG_STM32_LTDC_FB_DOUBLE_BUFFER)
-      fb_remove_paninfo(&g_vtable.vtable, FB_NO_OVERLAY);
+      /* The pan queue holds the buffer on the display and the buffer
+       * waiting for it.  Once the waiting buffer is on the display, the
+       * previous one is free to draw in.
+       */
+
+      if (fb_paninfo_count(&g_vtable.vtable, FB_NO_OVERLAY) > 1)
+        {
+          fb_remove_paninfo(&g_vtable.vtable, FB_NO_OVERLAY);
+        }
 #endif
     }
   else if (regval & LTDC_IER_LIE)
