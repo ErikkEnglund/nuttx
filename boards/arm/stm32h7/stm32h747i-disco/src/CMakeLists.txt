@@ -56,6 +56,10 @@ if(CONFIG_FAT_DMAMEMORY)
   list(APPEND SRCS stm32_dma_alloc.c)
 endif()
 
+if(CONFIG_STM32H747I_DISCO_LCD)
+  list(APPEND SRCS stm32_lcd.c stm32_lcdpanel.c)
+endif()
+
 target_sources(board PRIVATE ${SRCS})
 
 set_property(GLOBAL PROPERTY LD_SCRIPT "${NUTTX_BOARD_DIR}/scripts/flash.ld")

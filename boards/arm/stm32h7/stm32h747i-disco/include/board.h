@@ -131,6 +131,23 @@
 
 /* PLL3 */
 
+#ifdef CONFIG_STM32_LTDC
+/* PLL3R is the LTDC pixel clock: 25 MHz / 5 * 132 / 24 = 27.5 MHz */
+
+#define STM32_PLLCFG_PLL3CFG     (RCC_PLLCFGR_PLL3VCOSEL_WIDE | \
+                                  RCC_PLLCFGR_PLL3RGE_4_8_MHZ | \
+                                  RCC_PLLCFGR_DIVR3EN)
+#define STM32_PLLCFG_PLL3M       RCC_PLLCKSELR_DIVM3(5)
+#define STM32_PLLCFG_PLL3N       RCC_PLL3DIVR_N3(132)
+#define STM32_PLLCFG_PLL3P       RCC_PLL3DIVR_P3(2)
+#define STM32_PLLCFG_PLL3Q       RCC_PLL3DIVR_Q3(2)
+#define STM32_PLLCFG_PLL3R       RCC_PLL3DIVR_R3(24)
+
+#define STM32_VCO3_FREQUENCY     ((STM32_HSE_FREQUENCY / 5) * 132)
+#define STM32_PLL3P_FREQUENCY    (STM32_VCO3_FREQUENCY / 2)
+#define STM32_PLL3Q_FREQUENCY    (STM32_VCO3_FREQUENCY / 2)
+#define STM32_PLL3R_FREQUENCY    (STM32_VCO3_FREQUENCY / 24)
+#else
 #define STM32_PLLCFG_PLL3CFG 0
 #define STM32_PLLCFG_PLL3M   0
 #define STM32_PLLCFG_PLL3N   0
@@ -142,6 +159,7 @@
 #define STM32_PLL3P_FREQUENCY
 #define STM32_PLL3Q_FREQUENCY
 #define STM32_PLL3R_FREQUENCY
+#endif
 
 /* SYSCLK = PLL1P = 400 MHz
  * CPUCLK = SYSCLK / 1 = 400 MHz
@@ -308,6 +326,28 @@
        FMC_SDCMR_MRD_BURST_TYPE_SEQUENTIAL |\
        FMC_SDCMR_MRD_CAS_LATENCY_2 |\
        FMC_SDCMR_MRD_WRITEBURST_MODE_SINGLE)
+
+/* LCD definitions **********************************************************/
+
+/* The 4" 800x480 display of the MB1166 display board, connected over two
+ * DSI lanes in video mode.  The timings are those of its controller, an
+ * OTM8009A or an NT35510.  The LTDC signals are active low.
+ */
+
+#define BOARD_LTDC_WIDTH                800
+#define BOARD_LTDC_HEIGHT               480
+#define BOARD_LTDC_OUTPUT_BPP           24
+#define BOARD_LTDC_HSYNC                2
+#define BOARD_LTDC_HBP                  34
+#define BOARD_LTDC_HFP                  34
+#define BOARD_LTDC_VSYNC                1
+#define BOARD_LTDC_VBP                  15
+#define BOARD_LTDC_VFP                  16
+
+#define BOARD_LTDC_GCR_PCPOL            0 /* !LTDC_GCR_PCPOL */
+#define BOARD_LTDC_GCR_DEPOL            0 /* !LTDC_GCR_DEPOL */
+#define BOARD_LTDC_GCR_VSPOL            0 /* !LTDC_GCR_VSPOL */
+#define BOARD_LTDC_GCR_HSPOL            0 /* !LTDC_GCR_HSPOL */
 
 /* LED definitions **********************************************************/
 

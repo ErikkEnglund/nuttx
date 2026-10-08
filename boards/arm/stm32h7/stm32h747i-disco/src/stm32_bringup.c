@@ -33,6 +33,7 @@
 #include "stm32h747i-disco.h"
 
 #include <nuttx/fs/fs.h>
+#include <nuttx/video/fb.h>
 
 #ifdef CONFIG_INPUT_BUTTONS
 #  include <nuttx/input/buttons.h>
@@ -179,6 +180,16 @@ int stm32_bringup(void)
       syslog(LOG_ERR, "ERROR: btn_lower_initialize() failed: %d\n", ret);
     }
 #endif /* CONFIG_INPUT_BUTTONS */
+
+#ifdef CONFIG_VIDEO_FB
+  /* Register the display as /dev/fb0 */
+
+  ret = fb_register(0, 0);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: fb_register() failed: %d\n", ret);
+    }
+#endif
 
 #ifdef CONFIG_ADC
   /* Initialize ADC and register the ADC driver. */

@@ -93,6 +93,13 @@
 
 #define GPIO_BTN_USER  (GPIO_INPUT | GPIO_FLOAT | GPIO_EXTI | GPIO_PORTC | GPIO_PIN13)
 
+/* MB1166 DSI display: reset (active low) and backlight enable */
+
+#define GPIO_LCD_RESET (GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_SPEED_50MHz | \
+                        GPIO_OUTPUT_CLEAR | GPIO_PORTG | GPIO_PIN3)
+#define GPIO_LCD_BL    (GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_SPEED_50MHz | \
+                        GPIO_OUTPUT_CLEAR | GPIO_PORTJ | GPIO_PIN12)
+
 /* SD/TF Card'detected pin */
 
 #if defined(CONFIG_STM32_SDMMC1)
@@ -170,6 +177,38 @@ int stm32_dma_alloc_init(void);
 
 #ifdef HAVE_SDIO
 int stm32_sdio_initialize(void);
+#endif
+
+/****************************************************************************
+ * Name: stm32_lcdpanel_probe
+ *
+ * Description:
+ *   Read the ID of the display controller.
+ *
+ * Returned Value:
+ *   LCD_PANEL_OTM8009A or LCD_PANEL_NT35510 on success; a negated errno
+ *   value on failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_STM32H747I_DISCO_LCD
+#define LCD_PANEL_OTM8009A  1
+#define LCD_PANEL_NT35510   2
+
+struct mipi_dsi_device;
+int stm32_lcdpanel_probe(FAR struct mipi_dsi_device *device);
+
+/****************************************************************************
+ * Name: stm32_lcdpanel_initialize
+ *
+ * Description:
+ *   Send the initialization sequence of the display controller, for
+ *   landscape orientation and RGB888 pixels.
+ *
+ ****************************************************************************/
+
+int stm32_lcdpanel_initialize(FAR struct mipi_dsi_device *device,
+                              int panel);
 #endif
 
 #endif /* __BOARDS_ARM_STM32H7_STM32H747I_DISCO_SRC_STM32H747I_DISCO_H */
