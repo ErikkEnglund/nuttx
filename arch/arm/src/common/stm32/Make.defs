@@ -570,3 +570,9 @@ endif
 ifeq ($(CONFIG_SENSORS_HALL3PHASE),y)
 CHIP_CSRCS += stm32_hall3ph.c
 endif
+
+ifeq ($(CONFIG_STM32_DSIHOST),y)
+ifeq ($(CONFIG_STM32_HAVE_IP_DSIHOST_M4M7_V1),y)
+CHIP_CSRCS += stm32_dsihost_m4m7_v1.c
+endif
+endif

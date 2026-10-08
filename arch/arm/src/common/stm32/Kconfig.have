@@ -512,6 +512,9 @@ config STM32_HAVE_IP_LTDC_M3M4_V1
 config STM32_HAVE_DSIHOST
 	bool
 
+config STM32_HAVE_IP_DSIHOST_M4M7_V1
+	bool
+
 config STM32_HAVE_LCD
 	bool
 

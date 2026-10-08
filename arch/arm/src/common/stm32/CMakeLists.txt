@@ -515,4 +515,8 @@ if(CONFIG_SENSORS_HALL3PHASE)
   list(APPEND SRCS stm32_hall3ph.c)
 endif()
 
+if(CONFIG_STM32_DSIHOST AND CONFIG_STM32_HAVE_IP_DSIHOST_M4M7_V1)
+  list(APPEND SRCS stm32_dsihost_m4m7_v1.c)
+endif()
+
 target_sources(arch PRIVATE ${SRCS})
