@@ -30,9 +30,11 @@
 #include <syslog.h>
 #include <errno.h>
 
+#include "stm32_i2c.h"
 #include "stm32h747i-disco.h"
 
 #include <nuttx/fs/fs.h>
+#include <nuttx/i2c/i2c_master.h>
 #include <nuttx/video/fb.h>
 
 #ifdef CONFIG_INPUT_BUTTONS
