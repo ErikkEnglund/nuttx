@@ -573,6 +573,12 @@ static inline void rcc_enableapb3(void)
   regval |= RCC_APB3ENR_LTDCEN;
 #endif
 
+#ifdef CONFIG_STM32_DSIHOST
+  /* DSI host clock enable */
+
+  regval |= RCC_APB3ENR_DSIEN;
+#endif
+
   putreg32(regval, STM32_RCC_APB3ENR);   /* Enable peripherals */
 }
 

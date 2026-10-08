@@ -675,7 +675,9 @@ struct stm32_interrupt_s
 /* Overall LTDC helper */
 
 static void stm32_ltdc_enable(bool enable);
+#ifndef CONFIG_STM32_DSIHOST
 static void stm32_ltdc_gpioconfig(void);
+#endif
 static void stm32_ltdc_periphconfig(void);
 static void stm32_ltdc_bgcolor(uint32_t rgb);
 static void stm32_ltdc_dither(bool enable, uint8_t red,
@@ -785,8 +787,11 @@ static int stm32_blend(struct fb_vtable_s *vtable,
  * Private Data
  ****************************************************************************/
 
-/* PIO pin configurations */
+/* PIO pin configurations.  With the DSI host the LTDC output goes to the
+ * DSI host and no pins are used.
+ */
 
+#ifndef CONFIG_STM32_DSIHOST
 static const uint32_t g_ltdcpins[] =
 {
   GPIO_LTDC_R4, GPIO_LTDC_R5, GPIO_LTDC_R6, GPIO_LTDC_R7,
@@ -806,6 +811,7 @@ static const uint32_t g_ltdcpins[] =
 };
 
 #define STM32_LTDC_NPINCONFIGS (sizeof(g_ltdcpins) / sizeof(uint32_t))
+#endif
 
 #ifdef CONFIG_STM32_FB_CMAP
 /* The layers clut table entries */
@@ -1259,6 +1265,7 @@ static bool g_initialized;
  * Private Functions
  ****************************************************************************/
 
+#ifndef CONFIG_STM32_DSIHOST
 /****************************************************************************
  * Name: stm32_ltdc_gpioconfig
  *
@@ -1281,6 +1288,7 @@ static void stm32_ltdc_gpioconfig(void)
       stm32_configgpio(g_ltdcpins[i]);
     }
 }
+#endif
 
 /****************************************************************************
  * Name: stm32_ltdc_periphconfig
@@ -1295,9 +1303,11 @@ static void stm32_ltdc_periphconfig(void)
 {
   uint32_t regval;
 
+#ifndef CONFIG_STM32_DSIHOST
   /* Configure GPIO's */
 
   stm32_ltdc_gpioconfig();
+#endif
 
   /* Configure APB3 LTDC clock external */
 

@@ -180,6 +180,7 @@
 
 /* APB3 Base Addresses ******************************************************/
 
+#define STM32_DSIHOST_BASE     0x50000000     /* 0x50000000-0x50000fff DSI host */
 #define STM32_LTDC_BASE        0x50001000     /* 0x50001000-0x50001fff LTDC */
 #define STM32_WWDG1_BASE       0x50003000     /* 0x50003000-0x50003fff WWDG1 */
 
