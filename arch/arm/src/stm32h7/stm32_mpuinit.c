@@ -33,6 +33,8 @@
 #  include <nuttx/userspace.h>
 #endif
 
+#include <arch/board/board.h>
+
 #include "mpu.h"
 #include "hardware/stm32_memorymap.h"
 #include "stm32_mpuinit.h"
@@ -55,6 +57,36 @@
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
+
+#ifdef CONFIG_STM32_FMC
+/****************************************************************************
+ * Name: stm32_mpu_sdram
+ *
+ * Description:
+ *   The default memory map makes the FMC SDRAM banks device memory, which
+ *   is not cached and faults on unaligned accesses.  Make the SDRAM normal
+ *   memory, cached with the same write policy as the internal SRAM.
+ *   Access is privileged only: in a protected build, user heap regions in
+ *   SDRAM get their own region from stm32_mpu_uheap().
+ *
+ ****************************************************************************/
+
+static void stm32_mpu_sdram(uintptr_t base, size_t size)
+{
+#ifdef CONFIG_ARMV7M_DCACHE_WRITETHROUGH
+  mpu_configure_region(base, size,
+                       MPU_RASR_TEX_SO |   /* Normal, write-through */
+                       MPU_RASR_C |
+                       MPU_RASR_AP_RWNO);
+#else
+  mpu_configure_region(base, size,
+                       MPU_RASR_TEX_NOR |  /* Normal, write-back */
+                       MPU_RASR_C |
+                       MPU_RASR_B |
+                       MPU_RASR_AP_RWNO);
+#endif
+}
+#endif
 
 #ifdef CONFIG_BUILD_PROTECTED
 static void stm32_mpu_user_intsram(uintptr_t start, size_t size)
@@ -115,6 +147,17 @@ void stm32_mpuinitialize(void)
                  USERSPACE->us_textend - USERSPACE->us_textstart);
 
   stm32_mpu_user_intsram(datastart, dataend - datastart);
+#endif
+
+#ifdef CONFIG_STM32_FMC
+  /* Make the external SDRAM normal memory */
+
+#  ifdef BOARD_SDRAM1_SIZE
+  stm32_mpu_sdram(STM32_FMC_BANK5, BOARD_SDRAM1_SIZE);
+#  endif
+#  ifdef BOARD_SDRAM2_SIZE
+  stm32_mpu_sdram(STM32_FMC_BANK6, BOARD_SDRAM2_SIZE);
+#  endif
 #endif
 
 #ifdef CONFIG_RPTUN
