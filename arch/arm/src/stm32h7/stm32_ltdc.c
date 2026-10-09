@@ -1831,11 +1831,14 @@ static void stm32_ltdc_lframebuffer(struct stm32_ltdc_s *layer)
 
   /* Configure LxCFBLR register */
 
-  /* Calculate line length */
+  /* Calculate line length.  On the STM32H7 it is the number of bytes
+   * plus 7, not plus 3 as on the STM32F4 and STM32F7.  With plus 3 the
+   * layer stalls the LTDC until it is reset.
+   */
 
   cfblr = LTDC_LXCFBLR_CFBP(stm32_stride_layer_t[layerno]) |
           LTDC_LXCFBLR_CFBLL(stm32_width_layer_t[layerno] *
-          STM32_LTDC_LX_BYPP(stm32_bpp_layer_t[layerno]) + 3);
+          STM32_LTDC_LX_BYPP(stm32_bpp_layer_t[layerno]) + 7);
 
   reginfo("set LTDC_L%dCFBLR=%08" PRIx32 "\n", layerno + 1, cfblr);
   putreg32(cfblr, stm32_cfblr_layer_t[layerno]);
