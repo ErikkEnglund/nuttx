@@ -337,8 +337,13 @@
 /* LCD definitions **********************************************************/
 
 /* The 4" 800x480 display of the MB1166 display board, connected over two
- * DSI lanes in video mode.  The timings are those of its controller, an
- * OTM8009A or an NT35510.  The LTDC signals are active low.
+ * DSI lanes in video mode.  The LTDC signals are active low.
+ *
+ * The panel is 480x800 and its controller, an OTM8009A or an NT35510,
+ * turns the landscape picture.  The NT35510 scans one panel row per line
+ * of the video stream, so a frame needs more lines than the 800 rows of
+ * the panel; with fewer, the picture is split or black.  The long front
+ * porch gives 832 lines, 38 Hz.
  */
 
 #define BOARD_LTDC_WIDTH                800
@@ -349,7 +354,7 @@
 #define BOARD_LTDC_HFP                  34
 #define BOARD_LTDC_VSYNC                1
 #define BOARD_LTDC_VBP                  15
-#define BOARD_LTDC_VFP                  16
+#define BOARD_LTDC_VFP                  336
 
 #define BOARD_LTDC_GCR_PCPOL            0 /* !LTDC_GCR_PCPOL */
 #define BOARD_LTDC_GCR_DEPOL            0 /* !LTDC_GCR_DEPOL */
