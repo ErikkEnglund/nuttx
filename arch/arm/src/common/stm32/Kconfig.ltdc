@@ -111,6 +111,18 @@ config STM32_LTDC_FB_DOUBLE_BUFFER
 		refreshes, the active and inactive framebuffers are swapped,
 		enabling smooth and flicker-free updates.
 
+config STM32_LTDC_DSI_CMDMODE
+	bool "Refresh a DSI display in adapted command mode"
+	depends on ARCH_CHIP_STM32H7 && STM32_DSIHOST && !STM32_LTDC_L2
+	default n
+	---help---
+		The display is attached to the DSI host in adapted command mode
+		and has its own frame memory.  On each tearing effect event, the
+		LTDC sends the frame to the display in BOARD_LTDC_DSI_STRIPES
+		stripes of columns, so that the stripe written stays behind the
+		scan of a display that is turned by its controller.  A buffer is
+		free to draw in once it has been sent.
+
 if STM32_LTDC_DITHER
 
 config STM32_LTDC_DITHER_RED

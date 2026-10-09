@@ -51,6 +51,10 @@
 #include "stm32_gpio.h"
 #include "stm32_ltdc.h"
 
+#ifdef CONFIG_STM32_LTDC_DSI_CMDMODE
+#  include "stm32_dsihost.h"
+#endif
+
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
@@ -68,13 +72,29 @@
 #define STM32_LTDC_HEIGHT           BOARD_LTDC_HEIGHT
 #define STM32_LTDC_WIDTH            BOARD_LTDC_WIDTH
 
+/* In DSI adapted command mode the LTDC sends the frame in stripes of
+ * columns, so its active width is that of a stripe.
+ */
+
+#ifdef CONFIG_STM32_LTDC_DSI_CMDMODE
+#  ifndef BOARD_LTDC_DSI_STRIPES
+#    define BOARD_LTDC_DSI_STRIPES  1
+#  endif
+#  if STM32_LTDC_WIDTH % BOARD_LTDC_DSI_STRIPES != 0
+#    error BOARD_LTDC_WIDTH must be a multiple of BOARD_LTDC_DSI_STRIPES
+#  endif
+#  define STM32_LTDC_ACTIVEW        (STM32_LTDC_WIDTH / BOARD_LTDC_DSI_STRIPES)
+#else
+#  define STM32_LTDC_ACTIVEW        STM32_LTDC_WIDTH
+#endif
+
 /* Configure LTDC register */
 
 /* LTDC_LxWHPCR register */
 
 #define STM32_LTDC_LXWHPCR_WHSTPOS  (BOARD_LTDC_HSYNC + BOARD_LTDC_HBP - 1)
 #define STM32_LTDC_LxWHPCR_WHSPPOS  (BOARD_LTDC_HSYNC + BOARD_LTDC_HBP + \
-                                    STM32_LTDC_WIDTH - 1)
+                                    STM32_LTDC_ACTIVEW - 1)
 
 /* LTDC_LxWVPCR register */
 
@@ -104,7 +124,7 @@
                                     STM32_LTDC_HEIGHT + BOARD_LTDC_VFP - 1)
 #define STM32_LTDC_TWCR_TOTALW      LTDC_TWCR_TOTALW(BOARD_LTDC_HSYNC + \
                                     BOARD_LTDC_HBP + \
-                                    STM32_LTDC_WIDTH + BOARD_LTDC_HFP - 1)
+                                    STM32_LTDC_ACTIVEW + BOARD_LTDC_HFP - 1)
 
 /* Global GCR register */
 
@@ -668,6 +688,17 @@ struct stm32_interrupt_s
   sem_t *sem;       /* Semaphore for waiting for irq */
 };
 
+#ifdef CONFIG_STM32_LTDC_DSI_CMDMODE
+/* Refresh of a display in DSI adapted command mode */
+
+struct stm32_cmdrefresh_s
+{
+  uint32_t fbstart; /* Start of the buffer being sent */
+  uint8_t  stripe;  /* Stripe being sent */
+  bool     busy;    /* A refresh is in progress */
+};
+#endif
+
 /****************************************************************************
  * Private Function Prototypes
  ****************************************************************************/
@@ -685,6 +716,11 @@ static void stm32_ltdc_dither(bool enable, uint8_t red,
 static int stm32_ltdcirq(int irq, void *context, void *arg);
 static int stm32_ltdc_waitforirq(void);
 static int stm32_ltdc_reload(uint8_t value, bool waitvblank);
+#ifdef CONFIG_STM32_LTDC_DSI_CMDMODE
+static void stm32_ltdc_sendstripe(void);
+static void stm32_ltdc_te(void *arg);
+static void stm32_ltdc_refreshed(void *arg);
+#endif
 
 /* Helper for layer register configuration */
 
@@ -749,7 +785,8 @@ static int stm32_putcmap(struct fb_vtable_s *vtable,
 static int stm32_waitforvsync(struct fb_vtable_s *vtable);
 #endif
 
-#if defined(CONFIG_STM32_LTDC_FB_DOUBLE_BUFFER)
+#if defined(CONFIG_STM32_LTDC_FB_DOUBLE_BUFFER) && \
+    !defined(CONFIG_STM32_LTDC_DSI_CMDMODE)
 static int stm32_pandisplay(struct fb_vtable_s *vtable,
                             struct fb_planeinfo_s *pinfo);
 #endif
@@ -841,6 +878,10 @@ static struct stm32_interrupt_s g_interrupt =
   .sem     = &g_semirq
 };
 
+#ifdef CONFIG_STM32_LTDC_DSI_CMDMODE
+static struct stm32_cmdrefresh_s g_cmdrefresh;
+#endif
+
 /* This structure provides the internal interface */
 
 static struct stm32_ltdcdev_s g_vtable =
@@ -854,7 +895,8 @@ static struct stm32_ltdcdev_s g_vtable =
       .waitforvsync    = stm32_waitforvsync
 #endif
 
-#if defined(CONFIG_STM32_LTDC_FB_DOUBLE_BUFFER)
+#if defined(CONFIG_STM32_LTDC_FB_DOUBLE_BUFFER) && \
+    !defined(CONFIG_STM32_LTDC_DSI_CMDMODE)
       ,
       .pandisplay = stm32_pandisplay
 #endif
@@ -1512,7 +1554,8 @@ static int stm32_ltdcirq(int irq, void *context, void *arg)
       putreg32(LTDC_ICR_CRRIF, STM32_LTDC_ICR);
       priv->error = OK;
 
-#if defined(CONFIG_STM32_LTDC_FB_DOUBLE_BUFFER)
+#if defined(CONFIG_STM32_LTDC_FB_DOUBLE_BUFFER) && \
+    !defined(CONFIG_STM32_LTDC_DSI_CMDMODE)
       /* The pan queue holds the buffer on the display and the buffer
        * waiting for it.  Once the waiting buffer is on the display, the
        * previous one is free to draw in.
@@ -1686,6 +1729,100 @@ static void stm32_ltdc_irqconfig(void)
   stm32_ltdc_linepos();
 }
 
+#ifdef CONFIG_STM32_LTDC_DSI_CMDMODE
+/****************************************************************************
+ * Name: stm32_ltdc_sendstripe
+ *
+ * Description:
+ *   Point layer 1 at the current stripe of the buffer being sent, and send
+ *   it to the same columns of the display memory.
+ *
+ ****************************************************************************/
+
+static void stm32_ltdc_sendstripe(void)
+{
+  struct stm32_cmdrefresh_s *refresh = &g_cmdrefresh;
+  uint32_t x0 = refresh->stripe * STM32_LTDC_ACTIVEW;
+
+  stm32_dsihost_wrapper(false);
+  putreg32(refresh->fbstart +
+           x0 * STM32_LTDC_LX_BYPP(stm32_bpp_layer_t[LTDC_LAYER_L1]),
+           stm32_cfbar_layer_t[LTDC_LAYER_L1]);
+  putreg32(LTDC_SRCR_IMR, STM32_LTDC_SRCR);
+  stm32_dsihost_wrapper(true);
+
+  stm32_dsihost_cmdrefresh(x0, x0 + STM32_LTDC_ACTIVEW - 1);
+}
+
+/****************************************************************************
+ * Name: stm32_ltdc_te
+ *
+ * Description:
+ *   Tearing effect: the display has just scanned past the first stripe.
+ *   Send the newest buffer of the pan queue, or the last one again.
+ *
+ ****************************************************************************/
+
+static void stm32_ltdc_te(void *arg)
+{
+  struct stm32_cmdrefresh_s *refresh = &g_cmdrefresh;
+  struct fb_vtable_s *vtable = &g_vtable.vtable;
+  union fb_paninfo_u info;
+
+  if (refresh->busy)
+    {
+      return;
+    }
+
+  /* A buffer is free to draw in once it has been sent and a newer one
+   * waits.
+   */
+
+  if (fb_paninfo_count(vtable, FB_NO_OVERLAY) > 1)
+    {
+      fb_remove_paninfo(vtable, FB_NO_OVERLAY);
+    }
+
+  if (fb_peek_paninfo(vtable, &info, FB_NO_OVERLAY) == OK)
+    {
+      refresh->fbstart = (uint32_t)info.planeinfo.fbmem +
+                         info.planeinfo.yoffset * info.planeinfo.stride +
+                         info.planeinfo.xoffset * (info.planeinfo.bpp / 8);
+    }
+
+  refresh->stripe = 0;
+  refresh->busy   = true;
+  stm32_ltdc_sendstripe();
+}
+
+/****************************************************************************
+ * Name: stm32_ltdc_refreshed
+ *
+ * Description:
+ *   End of refresh: send the next stripe.
+ *
+ ****************************************************************************/
+
+static void stm32_ltdc_refreshed(void *arg)
+{
+  struct stm32_cmdrefresh_s *refresh = &g_cmdrefresh;
+
+  if (!refresh->busy)
+    {
+      return;
+    }
+
+  if (++refresh->stripe < BOARD_LTDC_DSI_STRIPES)
+    {
+      stm32_ltdc_sendstripe();
+    }
+  else
+    {
+      refresh->busy = false;
+    }
+}
+#endif /* CONFIG_STM32_LTDC_DSI_CMDMODE */
+
 /****************************************************************************
  * Name: stm32_ltdc_globalconfig
  *
@@ -1795,11 +1932,21 @@ static void stm32_ltdc_lframebuffer(struct stm32_ltdc_s *layer)
   uint32_t rypos;
   uint32_t whpcr;
   uint32_t wvpcr;
+  uint32_t width;
   uint8_t  layerno = layer->layerno;
 
   DEBUGASSERT(layer->layerno < LTDC_NLAYERS);
   reginfo("xpos = %d, ypos = %d, xres = %d, yres = %d\n", 0, 0,
           stm32_width_layer_t[layerno], stm32_height_layer_t[layerno]);
+
+  /* In DSI adapted command mode the window is one stripe of columns, and
+   * the stride stays that of the whole buffer.
+   */
+
+  width = stm32_width_layer_t[layerno];
+#ifdef CONFIG_STM32_LTDC_DSI_CMDMODE
+  width /= BOARD_LTDC_DSI_STRIPES;
+#endif
 
   /* Calculate register position */
 
@@ -1809,7 +1956,7 @@ static void stm32_ltdc_lframebuffer(struct stm32_ltdc_s *layer)
   /* Accumulate horizontal position */
 
   whpcr =  LTDC_LXWHPCR_WHSTPOS(rxpos);
-  whpcr |= LTDC_LXWHPCR_WHSPPOS(rxpos + stm32_width_layer_t[layerno] - 1);
+  whpcr |= LTDC_LXWHPCR_WHSPPOS(rxpos + width - 1);
 
   /* Accumulate vertical position */
 
@@ -1837,7 +1984,7 @@ static void stm32_ltdc_lframebuffer(struct stm32_ltdc_s *layer)
    */
 
   cfblr = LTDC_LXCFBLR_CFBP(stm32_stride_layer_t[layerno]) |
-          LTDC_LXCFBLR_CFBLL(stm32_width_layer_t[layerno] *
+          LTDC_LXCFBLR_CFBLL(width *
           STM32_LTDC_LX_BYPP(stm32_bpp_layer_t[layerno]) + 7);
 
   reginfo("set LTDC_L%dCFBLR=%08" PRIx32 "\n", layerno + 1, cfblr);
@@ -2592,7 +2739,8 @@ static int stm32_waitforvsync(struct fb_vtable_s *vtable)
  * Description:
  *   Entrypoint ioctl FBIOPAN_DISPLAY
  ****************************************************************************/
-#if defined(CONFIG_STM32_LTDC_FB_DOUBLE_BUFFER)
+#if defined(CONFIG_STM32_LTDC_FB_DOUBLE_BUFFER) && \
+    !defined(CONFIG_STM32_LTDC_DSI_CMDMODE)
 static int stm32_pandisplay(struct fb_vtable_s *vtable,
                             struct fb_planeinfo_s *pinfo)
 {
@@ -3131,6 +3279,17 @@ int stm32_ltdcinitialize(void)
 
   lcdinfo("Enabling the display\n");
   stm32_ltdc_enable(true);
+
+#ifdef CONFIG_STM32_LTDC_DSI_CMDMODE
+  /* Send the frame to the display on each tearing effect */
+
+  g_cmdrefresh.fbstart = stm32_fbmem_layer_t[LTDC_LAYER_L1];
+  ret = stm32_dsihost_cmdattach(stm32_ltdc_te, stm32_ltdc_refreshed, NULL);
+  if (ret < 0)
+    {
+      return ret;
+    }
+#endif
 
   /* Set initialized state */
 
