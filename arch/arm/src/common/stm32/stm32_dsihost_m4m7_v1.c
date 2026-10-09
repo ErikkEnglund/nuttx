@@ -35,9 +35,12 @@
 #include <debug.h>
 #include <errno.h>
 #include <stdint.h>
+#include <string.h>
 
 #include <nuttx/arch.h>
+#include <nuttx/irq.h>
 #include <nuttx/mutex.h>
+#include <nuttx/video/mipi_display.h>
 #include <nuttx/video/mipi_dsi.h>
 
 #include <arch/board/board.h>
@@ -68,6 +71,12 @@
 
 #define DSI_NULL_PACKET_SIZE    0xfff
 
+/* The DSI host interrupt is named differently on the STM32F4 */
+
+#if !defined(STM32_IRQ_DSIHOST) && defined(STM32_IRQ_DSI)
+#  define STM32_IRQ_DSIHOST     STM32_IRQ_DSI
+#endif
+
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -78,6 +87,13 @@ struct stm32_dsihost_s
   struct stm32_dsihost_config_s config;   /* Host configuration */
   mutex_t lock;                           /* Serializes register access */
   bool initialized;
+  uint8_t channel;                        /* Virtual channel of the device */
+
+  /* Adapted command mode */
+
+  stm32_dsihost_callback_t te;            /* Tearing effect callback */
+  stm32_dsihost_callback_t refreshed;     /* End of refresh callback */
+  FAR void *arg;                          /* Argument of the callbacks */
 };
 
 /****************************************************************************
@@ -90,6 +106,8 @@ static int stm32_dsihost_detach(FAR struct mipi_dsi_host *host,
                                 FAR struct mipi_dsi_device *device);
 static ssize_t stm32_dsihost_transfer(FAR struct mipi_dsi_host *host,
                                       FAR const struct mipi_dsi_msg *msg);
+static int stm32_dsihost_interrupt(int irq, FAR void *context,
+                                   FAR void *arg);
 
 /****************************************************************************
  * Private Data
@@ -396,6 +414,7 @@ static int stm32_dsihost_attach(FAR struct mipi_dsi_host *host,
     }
 
   putreg32(device->channel, STM32_DSI_LVCIDR);
+  priv->channel = device->channel;
 
   regval = 0;
   if (config->de_active_low)
@@ -478,6 +497,7 @@ static int stm32_dsihost_detach(FAR struct mipi_dsi_host *host,
 
 static int stm32_dsihost_sendpacket(FAR const struct mipi_dsi_packet *packet)
 {
+  irqstate_t flags;
   uint32_t word;
   size_t i;
   int ret;
@@ -488,6 +508,12 @@ static int stm32_dsihost_sendpacket(FAR const struct mipi_dsi_packet *packet)
     {
       return ret;
     }
+
+  /* The refresh in adapted command mode sends packets from the interrupt
+   * handler.  Keep the payload and the header of a packet together.
+   */
+
+  flags = enter_critical_section();
 
   for (i = 0; i < packet->payload_length; i += 4)
     {
@@ -511,6 +537,7 @@ static int stm32_dsihost_sendpacket(FAR const struct mipi_dsi_packet *packet)
                                    DSI_TIMEOUT_US);
       if (ret < 0)
         {
+          leave_critical_section(flags);
           return ret;
         }
 
@@ -519,6 +546,7 @@ static int stm32_dsihost_sendpacket(FAR const struct mipi_dsi_packet *packet)
 
   putreg32(packet->header[0] | DSI_GHCR_WCLSB(packet->header[1]) |
            DSI_GHCR_WCMSB(packet->header[2]), STM32_DSI_GHCR);
+  leave_critical_section(flags);
   return OK;
 }
 
@@ -622,6 +650,37 @@ static ssize_t stm32_dsihost_transfer(FAR struct mipi_dsi_host *host,
 
   nxmutex_unlock(&priv->lock);
   return nbytes;
+}
+
+/****************************************************************************
+ * Name: stm32_dsihost_interrupt
+ *
+ * Description:
+ *   Wrapper interrupts of the adapted command mode.
+ *
+ ****************************************************************************/
+
+static int stm32_dsihost_interrupt(int irq, FAR void *context,
+                                   FAR void *arg)
+{
+  FAR struct stm32_dsihost_s *priv = (FAR struct stm32_dsihost_s *)arg;
+  uint32_t status;
+
+  status = getreg32(STM32_DSI_WISR) & getreg32(STM32_DSI_WIER);
+
+  if ((status & DSI_WISR_TEIF) != 0)
+    {
+      putreg32(DSI_WIFCR_CTEIF, STM32_DSI_WIFCR);
+      priv->te(priv->arg);
+    }
+
+  if ((status & DSI_WISR_ERIF) != 0)
+    {
+      putreg32(DSI_WIFCR_CERIF, STM32_DSI_WIFCR);
+      priv->refreshed(priv->arg);
+    }
+
+  return OK;
 }
 
 /****************************************************************************
@@ -827,6 +886,95 @@ int stm32_dsihost_refresh(void)
 out:
   nxmutex_unlock(&priv->lock);
   return ret;
+}
+
+/****************************************************************************
+ * Name: stm32_dsihost_cmdattach
+ *
+ * Description:
+ *   In adapted command mode, call te on each tearing effect event and
+ *   refreshed at the end of each refresh.
+ *
+ ****************************************************************************/
+
+int stm32_dsihost_cmdattach(stm32_dsihost_callback_t te,
+                            stm32_dsihost_callback_t refreshed,
+                            FAR void *arg)
+{
+  FAR struct stm32_dsihost_s *priv = &g_dsihost;
+  int ret;
+
+  DEBUGASSERT(te != NULL && refreshed != NULL);
+
+  priv->te        = te;
+  priv->refreshed = refreshed;
+  priv->arg       = arg;
+
+  putreg32(DSI_WIFCR_CTEIF | DSI_WIFCR_CERIF, STM32_DSI_WIFCR);
+
+  ret = irq_attach(STM32_IRQ_DSIHOST, stm32_dsihost_interrupt, priv);
+  if (ret < 0)
+    {
+      return ret;
+    }
+
+  putreg32(DSI_WIER_TEIE | DSI_WIER_ERIE, STM32_DSI_WIER);
+  up_enable_irq(STM32_IRQ_DSIHOST);
+  return OK;
+}
+
+/****************************************************************************
+ * Name: stm32_dsihost_cmdrefresh
+ *
+ * Description:
+ *   In adapted command mode, send the LTDC frame to the columns x0 to x1
+ *   of the display memory.
+ *
+ ****************************************************************************/
+
+void stm32_dsihost_cmdrefresh(uint16_t x0, uint16_t x1)
+{
+  FAR struct stm32_dsihost_s *priv = &g_dsihost;
+  struct mipi_dsi_packet packet;
+  struct mipi_dsi_msg msg;
+  uint8_t columns[5];
+
+  /* The memory write of the LTDC frame starts at the first column */
+
+  columns[0] = MIPI_DCS_SET_COLUMN_ADDRESS;
+  columns[1] = x0 >> 8;
+  columns[2] = x0 & 0xff;
+  columns[3] = x1 >> 8;
+  columns[4] = x1 & 0xff;
+
+  memset(&msg, 0, sizeof(msg));
+  msg.channel = priv->channel;
+  msg.type    = MIPI_DSI_DCS_LONG_WRITE;
+  msg.tx_len  = sizeof(columns);
+  msg.tx_buf  = columns;
+
+  if (mipi_dsi_create_packet(&packet, &msg) < 0 ||
+      stm32_dsihost_sendpacket(&packet) < 0)
+    {
+      verr("ERROR: Set column address failed\n");
+      return;
+    }
+
+  modifyreg32(STM32_DSI_WCR, 0, DSI_WCR_LTDCEN);
+}
+
+/****************************************************************************
+ * Name: stm32_dsihost_wrapper
+ *
+ * Description:
+ *   Disconnect the LTDC from the DSI host, or connect it again.
+ *
+ ****************************************************************************/
+
+void stm32_dsihost_wrapper(bool enable)
+{
+  modifyreg32(STM32_DSI_WCR, enable ? 0 : DSI_WCR_DSIEN,
+              enable ? DSI_WCR_DSIEN : 0);
 }
 
 #endif /* CONFIG_STM32_DSIHOST */

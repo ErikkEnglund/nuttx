@@ -346,6 +346,11 @@
 #define DSI_WCR_LTDCEN            (1 << 2)  /* Bit 2: LTDC enable (start a refresh) */
 #define DSI_WCR_DSIEN             (1 << 3)  /* Bit 3: DSI wrapper enable */
 
+/* Wrapper interrupt enable register */
+
+#define DSI_WIER_TEIE             (1 << 0)  /* Bit 0: Tearing effect */
+#define DSI_WIER_ERIE             (1 << 1)  /* Bit 1: End of refresh */
+
 /* Wrapper interrupt and status register */
 
 #define DSI_WISR_TEIF             (1 << 0)  /* Bit 0: Tearing effect */

@@ -63,6 +63,10 @@ struct stm32_dsihost_video_s
                                 * lines, in bytes */
 };
 
+/* Callback of the adapted command mode interrupts */
+
+typedef CODE void (*stm32_dsihost_callback_t)(FAR void *arg);
+
 /* DSI host configuration.
  *
  * The DSI PLL is clocked by the HSE, which must be running.  The lane bit
@@ -75,8 +79,8 @@ struct stm32_dsihost_video_s
  * The video settings apply when the attached device asks for
  * MIPI_DSI_MODE_VIDEO, the adapted command mode settings otherwise.  In
  * adapted command mode the LTDC sends a frame each time
- * stm32_dsihost_refresh() is called, or on each tearing effect event with
- * autorefresh.
+ * stm32_dsihost_refresh() or stm32_dsihost_cmdrefresh() is called, or on
+ * each tearing effect event with autorefresh.
  */
 
 struct stm32_dsihost_config_s
@@ -176,6 +180,58 @@ int stm32_dsihost_start(void);
  ****************************************************************************/
 
 int stm32_dsihost_refresh(void);
+
+/****************************************************************************
+ * Name: stm32_dsihost_cmdattach
+ *
+ * Description:
+ *   In adapted command mode, call te on each tearing effect event and
+ *   refreshed at the end of each refresh.  Both are called by the
+ *   interrupt handler.
+ *
+ * Input Parameters:
+ *   te        - Tearing effect callback
+ *   refreshed - End of refresh callback
+ *   arg       - Argument of both callbacks
+ *
+ * Returned Value:
+ *   Zero (OK) on success; a negated errno value on failure.
+ *
+ ****************************************************************************/
+
+int stm32_dsihost_cmdattach(stm32_dsihost_callback_t te,
+                            stm32_dsihost_callback_t refreshed,
+                            FAR void *arg);
+
+/****************************************************************************
+ * Name: stm32_dsihost_cmdrefresh
+ *
+ * Description:
+ *   In adapted command mode, send the LTDC frame to the columns x0 to x1
+ *   of the display memory.  For the callbacks of stm32_dsihost_cmdattach():
+ *   it does not sleep, and the previous refresh must be over.
+ *
+ * Input Parameters:
+ *   x0 - First column
+ *   x1 - Last column
+ *
+ ****************************************************************************/
+
+void stm32_dsihost_cmdrefresh(uint16_t x0, uint16_t x1);
+
+/****************************************************************************
+ * Name: stm32_dsihost_wrapper
+ *
+ * Description:
+ *   Disconnect the LTDC from the DSI host, to change the LTDC configuration
+ *   between two refreshes in adapted command mode, and connect it again.
+ *
+ * Input Parameters:
+ *   enable - Connect the LTDC
+ *
+ ****************************************************************************/
+
+void stm32_dsihost_wrapper(bool enable);
 
 #undef EXTERN
 #ifdef __cplusplus
