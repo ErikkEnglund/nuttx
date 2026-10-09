@@ -84,6 +84,14 @@
 #    error BOARD_LTDC_WIDTH must be a multiple of BOARD_LTDC_DSI_STRIPES
 #  endif
 #  define STM32_LTDC_ACTIVEW        (STM32_LTDC_WIDTH / BOARD_LTDC_DSI_STRIPES)
+
+/* The display refreshes itself and signals each refresh with the tearing
+ * effect.  FBIOSET_FRAMERATE sends a frame on every nth refresh only.
+ */
+
+#  ifndef BOARD_LTDC_DSI_REFRESH
+#    define BOARD_LTDC_DSI_REFRESH  60
+#  endif
 #else
 #  define STM32_LTDC_ACTIVEW        STM32_LTDC_WIDTH
 #endif
@@ -696,6 +704,8 @@ struct stm32_cmdrefresh_s
   uint32_t fbstart; /* Start of the buffer being sent */
   uint8_t  stripe;  /* Stripe being sent */
   bool     busy;    /* A refresh is in progress */
+  uint8_t  divider; /* Send a frame on every nth tearing effect */
+  uint8_t  skipped; /* Tearing effects since the last frame sent */
 };
 #endif
 
@@ -720,6 +730,8 @@ static int stm32_ltdc_reload(uint8_t value, bool waitvblank);
 static void stm32_ltdc_sendstripe(void);
 static void stm32_ltdc_te(void *arg);
 static void stm32_ltdc_refreshed(void *arg);
+static int stm32_setframerate(struct fb_vtable_s *vtable, int rate);
+static int stm32_getframerate(struct fb_vtable_s *vtable);
 #endif
 
 /* Helper for layer register configuration */
@@ -899,6 +911,12 @@ static struct stm32_ltdcdev_s g_vtable =
     !defined(CONFIG_STM32_LTDC_DSI_CMDMODE)
       ,
       .pandisplay = stm32_pandisplay
+#endif
+
+#ifdef CONFIG_STM32_LTDC_DSI_CMDMODE
+      ,
+      .setframerate    = stm32_setframerate,
+      .getframerate    = stm32_getframerate
 #endif
 
 #ifdef CONFIG_STM32_FB_CMAP
@@ -1769,10 +1787,12 @@ static void stm32_ltdc_te(void *arg)
   struct fb_vtable_s *vtable = &g_vtable.vtable;
   union fb_paninfo_u info;
 
-  if (refresh->busy)
+  if (refresh->busy || ++refresh->skipped < refresh->divider)
     {
       return;
     }
+
+  refresh->skipped = 0;
 
   /* A buffer is free to draw in once it has been sent and a newer one
    * waits.
@@ -1820,6 +1840,54 @@ static void stm32_ltdc_refreshed(void *arg)
     {
       refresh->busy = false;
     }
+}
+
+/****************************************************************************
+ * Name: stm32_setframerate
+ *
+ * Description:
+ *   Entrypoint ioctl FBIOSET_FRAMERATE: send a frame on every nth refresh
+ *   of the display, for the frame rate nearest to rate.  Zero or less for
+ *   every refresh.
+ *
+ ****************************************************************************/
+
+static int stm32_setframerate(struct fb_vtable_s *vtable, int rate)
+{
+  int divider = 1;
+
+  DEBUGASSERT(vtable == &g_vtable.vtable);
+
+  if (rate > 0)
+    {
+      divider = (BOARD_LTDC_DSI_REFRESH + rate / 2) / rate;
+      if (divider < 1)
+        {
+          divider = 1;
+        }
+      else if (divider > UINT8_MAX)
+        {
+          divider = UINT8_MAX;
+        }
+    }
+
+  g_cmdrefresh.divider = divider;
+  return OK;
+}
+
+/****************************************************************************
+ * Name: stm32_getframerate
+ *
+ * Description:
+ *   Entrypoint ioctl FBIOGET_FRAMERATE
+ *
+ ****************************************************************************/
+
+static int stm32_getframerate(struct fb_vtable_s *vtable)
+{
+  DEBUGASSERT(vtable == &g_vtable.vtable);
+
+  return BOARD_LTDC_DSI_REFRESH / g_cmdrefresh.divider;
 }
 #endif /* CONFIG_STM32_LTDC_DSI_CMDMODE */
 
@@ -3284,6 +3352,7 @@ int stm32_ltdcinitialize(void)
   /* Send the frame to the display on each tearing effect */
 
   g_cmdrefresh.fbstart = stm32_fbmem_layer_t[LTDC_LAYER_L1];
+  g_cmdrefresh.divider = 1;
   ret = stm32_dsihost_cmdattach(stm32_ltdc_te, stm32_ltdc_refreshed, NULL);
   if (ret < 0)
     {
