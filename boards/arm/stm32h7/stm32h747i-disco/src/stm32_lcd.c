@@ -20,9 +20,10 @@
  *
  ****************************************************************************/
 
-/* The 4" 800x480 display of the MB1166 display board.  The LTDC scans the
- * framebuffer in SDRAM and the DSI host sends it to the panel over two
- * lanes in video burst mode.
+/* The 4" 800x480 display of the MB1166 display board.  The display
+ * controller has its own frame memory and refreshes the panel from it.
+ * The DSI host runs in adapted command mode: on each tearing effect the
+ * LTDC sends the framebuffer in SDRAM to the frame memory, over two lanes.
  */
 
 /****************************************************************************
@@ -59,31 +60,25 @@
  * Private Data
  ****************************************************************************/
 
-/* DSI host: two lanes at 500 Mbit/s from the 25 MHz HSE, as in the ST
- * board support package.  The PHY timers keep their reset values.
+/* DSI host: two lanes at 500 Mbit/s from the 25 MHz HSE, with the PHY
+ * timers of the ST examples.  Adapted command mode, with the tearing
+ * effect on the TE pin; a memory write command carries a line of a stripe.
  */
 
 static const struct stm32_dsihost_config_s g_dsiconfig =
 {
-  .pll_ndiv  = 100,
-  .pll_idf   = 5,
-  .pll_odf   = 1,
-  .lanes     = LCD_DSI_LANES,
-  .txesc_div = 4,
-  .video     =
-    {
-      .pixelclock = STM32_PLL3R_FREQUENCY,
-      .hactive    = BOARD_LTDC_WIDTH,
-      .hsync      = BOARD_LTDC_HSYNC,
-      .hbp        = BOARD_LTDC_HBP,
-      .hfp        = BOARD_LTDC_HFP,
-      .vactive    = BOARD_LTDC_HEIGHT,
-      .vsync      = BOARD_LTDC_VSYNC,
-      .vbp        = BOARD_LTDC_VBP,
-      .vfp        = BOARD_LTDC_VFP,
-      .lpsize     = 64,
-      .vlpsize    = 64,
-    },
+  .pll_ndiv   = 100,
+  .pll_idf    = 5,
+  .pll_odf    = 1,
+  .lanes      = LCD_DSI_LANES,
+  .txesc_div  = 4,
+  .clk_lp2hs  = 35,
+  .clk_hs2lp  = 35,
+  .data_lp2hs = 35,
+  .data_hs2lp = 35,
+  .stop_wait  = 10,
+  .cmdsize    = BOARD_LTDC_WIDTH / BOARD_LTDC_DSI_STRIPES,
+  .te_pin     = true,
 };
 
 static bool g_initialized;
@@ -96,8 +91,8 @@ static bool g_initialized;
  * Name: up_fbinitialize
  *
  * Description:
- *   Reset the display, start the DSI video stream from the LTDC and
- *   initialize the display controller.
+ *   Reset the display, set up the DSI host in adapted command mode and the
+ *   LTDC, and initialize the display controller.
  *
  ****************************************************************************/
 
@@ -126,6 +121,7 @@ int up_fbinitialize(int display)
 
   stm32_configgpio(GPIO_LCD_BL);
   stm32_gpiowrite(GPIO_LCD_BL, true);
+  stm32_configgpio(GPIO_LCD_TE);
 
   ret = stm32_dsihost_initialize(&g_dsiconfig);
   if (ret < 0)
@@ -142,7 +138,7 @@ int up_fbinitialize(int display)
 
   device->lanes      = LCD_DSI_LANES;
   device->format     = MIPI_DSI_FMT_RGB888;
-  device->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST;
+  device->mode_flags = 0;
 
   ret = mipi_dsi_attach(device);
   if (ret < 0)
@@ -151,9 +147,9 @@ int up_fbinitialize(int display)
       return ret;
     }
 
-  /* The LTDC must run before the DSI video stream starts.  In video mode
-   * the host sends commands in the blanking periods of the stream, so the
-   * controller can only be probed and set up once the stream runs.
+  /* The LTDC must be set up before the DSI wrapper connects it.  The LTDC
+   * starts to send frames once the controller is set up and signals the
+   * tearing effect.
    */
 
   ret = stm32_ltdcinitialize();

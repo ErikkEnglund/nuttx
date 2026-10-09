@@ -63,14 +63,25 @@
 
 #define LCD_DELAY(ms)       0, (ms)
 
+/* The tearing effect comes when the controller scans this line of the
+ * panel, a column of the landscape picture.  The LTDC then sends the left
+ * stripe of 400 columns, behind the scan, and the right one, before the
+ * scan comes back to it.
+ */
+
+#define LCD_TE_SCANLINE     533
+#define LCD_TE_ON           3, 0x44, LCD_TE_SCANLINE >> 8, \
+                            LCD_TE_SCANLINE & 0xff, \
+                            2, 0x35, 0x00
+
 /****************************************************************************
  * Private Data
  ****************************************************************************/
 
 /* OTM8009A: switch to the command 2 page, then the vendor settings for
  * power, timing and gamma, sleep out, RGB888, landscape, a 800x480
- * window, brightness and display on.  Command 0x00 sets the address
- * shift for the vendor register that follows.
+ * window, brightness, display on and the tearing effect.  Command 0x00
+ * sets the address shift for the vendor register that follows.
  */
 
 static const uint8_t g_otm8009a_init[] =
@@ -198,10 +209,12 @@ static const uint8_t g_otm8009a_init[] =
   2, 0x29, 0x00,
   2, 0x00, 0x00,
   2, 0x2c, 0x00,
+  LCD_TE_ON,
 };
 
 /* NT35510: the vendor settings on pages 1 and 0, landscape, a 800x480
- * window, sleep out, RGB888, brightness and display on.
+ * window, sleep out, RGB888, brightness, display on and the tearing
+ * effect.
  */
 
 static const uint8_t g_nt35510_init[] =
@@ -243,6 +256,7 @@ static const uint8_t g_nt35510_init[] =
   2, 0x5e, 0xff,
   2, 0x29, 0x00,
   2, 0x2c, 0x00,
+  LCD_TE_ON,
 };
 
 /****************************************************************************

@@ -93,12 +93,16 @@
 
 #define GPIO_BTN_USER  (GPIO_INPUT | GPIO_FLOAT | GPIO_EXTI | GPIO_PORTC | GPIO_PIN13)
 
-/* MB1166 DSI display: reset (active low) and backlight enable */
+/* MB1166 DSI display: reset (active low), backlight enable, and the
+ * tearing effect output of the controller to the DSI host (DSI_TE, AF13)
+ */
 
 #define GPIO_LCD_RESET (GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_SPEED_50MHz | \
                         GPIO_OUTPUT_CLEAR | GPIO_PORTG | GPIO_PIN3)
 #define GPIO_LCD_BL    (GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_SPEED_50MHz | \
                         GPIO_OUTPUT_CLEAR | GPIO_PORTJ | GPIO_PIN12)
+#define GPIO_LCD_TE    (GPIO_ALT | GPIO_AF13 | GPIO_FLOAT | GPIO_PORTJ | \
+                        GPIO_PIN2)
 
 /* FT6x06 touch controller of the MB1166 display board on I2C4.  Its
  * interrupt line PK7 is active low.

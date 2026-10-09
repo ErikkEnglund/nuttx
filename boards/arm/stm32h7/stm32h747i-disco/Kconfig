@@ -11,11 +11,13 @@ config STM32H747I_DISCO_LCD
 	depends on VIDEO_FB && STM32_FMC
 	select STM32_DSIHOST
 	select STM32_LTDC
+	select STM32_LTDC_DSI_CMDMODE
 	select MIPI_DSI
 	---help---
 		Framebuffer driver for the 4" 800x480 display of the MB1166
-		display board, connected over two DSI lanes in video mode.  The
-		OTM8009A and NT35510 controllers are detected at runtime.  The
-		framebuffer is in the SDRAM, at CONFIG_STM32_LTDC_FB_BASE.
+		display board, connected over two DSI lanes in adapted command
+		mode.  The OTM8009A and NT35510 controllers are detected at
+		runtime.  The framebuffer is in the SDRAM, at
+		CONFIG_STM32_LTDC_FB_BASE.
 
 endif # ARCH_BOARD_STM32H747I_DISCO

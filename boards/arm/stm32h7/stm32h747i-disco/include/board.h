@@ -132,21 +132,21 @@
 /* PLL3 */
 
 #ifdef CONFIG_STM32_LTDC
-/* PLL3R is the LTDC pixel clock: 25 MHz / 5 * 132 / 24 = 27.5 MHz */
+/* PLL3R is the LTDC pixel clock: 25 MHz / 5 * 160 / 19 = 42.1 MHz */
 
 #define STM32_PLLCFG_PLL3CFG     (RCC_PLLCFGR_PLL3VCOSEL_WIDE | \
                                   RCC_PLLCFGR_PLL3RGE_4_8_MHZ | \
                                   RCC_PLLCFGR_DIVR3EN)
 #define STM32_PLLCFG_PLL3M       RCC_PLLCKSELR_DIVM3(5)
-#define STM32_PLLCFG_PLL3N       RCC_PLL3DIVR_N3(132)
+#define STM32_PLLCFG_PLL3N       RCC_PLL3DIVR_N3(160)
 #define STM32_PLLCFG_PLL3P       RCC_PLL3DIVR_P3(2)
 #define STM32_PLLCFG_PLL3Q       RCC_PLL3DIVR_Q3(2)
-#define STM32_PLLCFG_PLL3R       RCC_PLL3DIVR_R3(24)
+#define STM32_PLLCFG_PLL3R       RCC_PLL3DIVR_R3(19)
 
-#define STM32_VCO3_FREQUENCY     ((STM32_HSE_FREQUENCY / 5) * 132)
+#define STM32_VCO3_FREQUENCY     ((STM32_HSE_FREQUENCY / 5) * 160)
 #define STM32_PLL3P_FREQUENCY    (STM32_VCO3_FREQUENCY / 2)
 #define STM32_PLL3Q_FREQUENCY    (STM32_VCO3_FREQUENCY / 2)
-#define STM32_PLL3R_FREQUENCY    (STM32_VCO3_FREQUENCY / 24)
+#define STM32_PLL3R_FREQUENCY    (STM32_VCO3_FREQUENCY / 19)
 #else
 #define STM32_PLLCFG_PLL3CFG 0
 #define STM32_PLLCFG_PLL3M   0
@@ -337,24 +337,27 @@
 /* LCD definitions **********************************************************/
 
 /* The 4" 800x480 display of the MB1166 display board, connected over two
- * DSI lanes in video mode.  The LTDC signals are active low.
+ * DSI lanes in adapted command mode.  The LTDC signals are active low.
  *
  * The panel is 480x800 and its controller, an OTM8009A or an NT35510,
- * turns the landscape picture.  The NT35510 scans one panel row per line
- * of the video stream, so a frame needs more lines than the 800 rows of
- * the panel; with fewer, the picture is split or black.  The long front
- * porch gives 832 lines, 38 Hz.
+ * turns the landscape picture: it writes rows into its frame memory but
+ * scans the panel in columns.  So the LTDC sends each frame in two
+ * stripes of 400 columns, both behind the scan, on the tearing effect at
+ * the scan line set in stm32_lcdpanel.c.  The display refreshes itself at
+ * about 60 Hz, and a frame takes 9.3 ms to send.  The porches only space
+ * the lines of the LTDC.
  */
 
 #define BOARD_LTDC_WIDTH                800
 #define BOARD_LTDC_HEIGHT               480
 #define BOARD_LTDC_OUTPUT_BPP           24
-#define BOARD_LTDC_HSYNC                2
-#define BOARD_LTDC_HBP                  34
-#define BOARD_LTDC_HFP                  34
+#define BOARD_LTDC_HSYNC                1
+#define BOARD_LTDC_HBP                  1
+#define BOARD_LTDC_HFP                  1
 #define BOARD_LTDC_VSYNC                1
-#define BOARD_LTDC_VBP                  15
-#define BOARD_LTDC_VFP                  336
+#define BOARD_LTDC_VBP                  1
+#define BOARD_LTDC_VFP                  1
+#define BOARD_LTDC_DSI_STRIPES          2
 
 #define BOARD_LTDC_GCR_PCPOL            0 /* !LTDC_GCR_PCPOL */
 #define BOARD_LTDC_GCR_DEPOL            0 /* !LTDC_GCR_DEPOL */
