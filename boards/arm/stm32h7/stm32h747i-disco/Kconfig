@@ -18,13 +18,4 @@ config STM32H747I_DISCO_LCD
 		OTM8009A and NT35510 controllers are detected at runtime.  The
 		framebuffer is in the SDRAM, at CONFIG_STM32_LTDC_FB_BASE.
 
-config STM32H747I_DISCO_TOUCHSCREEN_SWAPXY
-	bool "Swap the touch screen X and Y"
-	default n
-	depends on INPUT_FT5X06
-	---help---
-		The FT6x06 touch controller of the MB1166 display board reports
-		landscape coordinates, like the display.  Swap X and Y if it does
-		not match.
-
 endif # ARCH_BOARD_STM32H747I_DISCO

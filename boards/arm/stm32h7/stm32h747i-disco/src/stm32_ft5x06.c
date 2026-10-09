@@ -103,11 +103,16 @@ static const struct ft5x06_config_s g_ft5x06_config =
 #endif
   .wakeup    = stm32_ft5x06_wakeup,
   .nreset    = stm32_ft5x06_nreset,
+
+  /* The touch panel reports portrait coordinates.  Turn them like the
+   * landscape picture of the display.
+   */
+
   .lower     =
     {
-#ifdef CONFIG_STM32H747I_DISCO_TOUCHSCREEN_SWAPXY
-      .flags = TOUCH_FLAG_SWAPXY,
-#endif
+      .xres  = BOARD_LTDC_WIDTH,
+      .yres  = BOARD_LTDC_HEIGHT,
+      .flags = TOUCH_FLAG_SWAPXY | TOUCH_FLAG_MIRRORY,
     },
 };
 
