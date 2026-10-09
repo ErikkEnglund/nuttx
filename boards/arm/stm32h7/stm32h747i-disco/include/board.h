@@ -358,6 +358,7 @@
 #define BOARD_LTDC_VBP                  1
 #define BOARD_LTDC_VFP                  1
 #define BOARD_LTDC_DSI_STRIPES          2
+#define BOARD_LTDC_DSI_REFRESH          59   /* Hz */
 
 #define BOARD_LTDC_GCR_PCPOL            0 /* !LTDC_GCR_PCPOL */
 #define BOARD_LTDC_GCR_DEPOL            0 /* !LTDC_GCR_DEPOL */
